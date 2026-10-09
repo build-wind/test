@@ -42,7 +42,7 @@
 
 			const app = document.getElementById("app");
 
-			loadAssetWithProgress("/img.png", ({ percentage, loaded, total }) => {
+			loadAssetWithProgress("/test/img.png", ({ percentage, loaded, total }) => {
 				app.innerHTML = "";
 				app.innerHTML = `<h1>Downloaded ${percentage}% (${loaded} of ${total} bytes)</h1>`;
 			})
