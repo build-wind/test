@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>funny-pdf</title>
+	</head>
+	<body>
+		<div id="app"></div>
+
+		<script>
+			async function loadAssetWithProgress(url, onProgress) {
+				const response = await fetch(url);
+
+				if (!response.ok) throw new Error(`Failed to load ${url}`);
+
+				// Get total file size from response header
+				const contentLength = response.headers.get('content-length');
+				const total = contentLength ? parseInt(contentLength, 10) : 0;
+
+				const reader = response.body.getReader();
+				let loaded = 0;
+				const chunks = [];
+
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					chunks.push(value);
+					loaded += value.length;
+
+					// Calculate percentage if Content-Length is available
+					const percentage = total ? Math.round((loaded / total) * 100) : 0;
+					onProgress({ loaded, total, percentage });
+				}
+
+				// Combine chunks into a single Blob
+				const blob = new Blob(chunks, { type: response.headers.get('content-type') });
+				return URL.createObjectURL(blob);
+			}
+
+			const app = document.getElementById("app");
+
+			loadAssetWithProgress("/img.png", ({ percentage, loaded, total }) => {
+				app.innerHTML = "";
+				app.innerHTML = `<h1>Downloaded ${percentage}% (${loaded} of ${total} bytes)</h1>`;
+			})
+			.then((blobUrl) => {
+				const img = document.createElement("img");
+				img.src = blobUrl;
+				document.body.appendChild(img);
+			})
+			.catch(console.error);
+		</script>
+	</body>
+</html>

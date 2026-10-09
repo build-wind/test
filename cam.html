@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>cam -> pdf</title>
+	<style></style>
+  <link rel="stylesheet" crossorigin href="/assets/bootstrap-DMFBxjQs.css">
+</head>
+<body class="d-flex flex-column vh-100 vw-100 overflow-hidden">
+	<h1 class="p-3 text-center mb-0">Take a quality photo</h1>
+
+	<div class="text-center p-3" id="btn-start-wrapper">
+		<button class="btn btn-lg btn-primary" onclick="startCamera(this)">Start Cam</button>
+	</div>
+
+	<!-- Use d-none alongside flex classes -->
+	<section id="camera" class="d-none flex-column w-100 flex-grow-1 overflow-hidden">
+		<!-- Container constrains the video size -->
+		<div id="cam-div" class="w-100 flex-grow-1 position-relative overflow-hidden bg-black">
+			<!-- mw-100 mh-100 object-fit-contain keeps the video within bounds without distortion -->
+			<!-- <video id="camera-video" autoplay playsinline muted class="mw-100 mh-100 object-fit-contain"></video> -->
+		</div>
+		<div class="w-100 p-3 d-flex justify-content-evenly bg-dark">
+			<button class="btn btn-primary btn-lg" id="btn-capture">Capture</button>
+			<button class="btn btn-primary btn-lg" id="btn-switch-camera">Switch Cam</button>
+		</div>
+	</section>
+
+	<div id="logger" class="w-100 small mt-2 overflow-scroll" style="height: 75px;">
+		<p id="init">Log started...</p>
+	</div>
+
+	<script>
+		const startWrapper = document.getElementById("btn-start-wrapper");
+
+		const camArea = document.getElementById("camera");
+		const camDiv = document.getElementById("cam-div");
+
+		let state = {
+			videoEl: null,
+			mediaStream: null,
+			facingMode: 'environment',
+		};
+
+		async function getVideoDevices() {
+			if (!navigator.mediaDevices?.enumerateDevices) return [];
+			try {
+				const devices = await navigator.mediaDevices.enumerateDevices();
+				return devices.filter(device => device.kind === 'videoinput');
+			}
+			catch (e) {
+				console.warn("Could not enumerate devices:", e);
+				return [];
+			}
+		}
+
+		function generateVideoEl() {
+			camDiv.innerHTML = "";
+			state.videoEl = null;
+			logData(`videoEl level 2: ${ state.videoEl ? 'true' : 'false' }`);
+
+			const videoEl = document.createElement("video");
+
+			videoEl.setAttribute("id", "camera-video");
+			videoEl.setAttribute("autoplay", "true");
+			videoEl.setAttribute("playsinline", "true");
+			videoEl.setAttribute("muted", "true");
+			videoEl.className = "position-absolute top-0 start-0 w-100 h-100 object-fit-contain";
+
+			videoEl.setAttribute("height", "200px");
+			videoEl.setAttribute("width", "200px");
+
+			camDiv.appendChild(videoEl);
+
+			state.videoEl = videoEl;
+			return true;
+		}
+
+		// 1. Camera Initialization
+		async function startCamera(btn) {
+			if (btn) startWrapper.classList.add("d-none");
+
+			logData(`videoEl level 1: ${ state.videoEl ? 'true' : 'false' }`);
+
+			generateVideoEl();
+
+			if (state.videoEl) {
+				camArea.classList.remove("d-none");
+				camArea.classList.add("d-flex");
+
+				if (state.mediaStream) {
+					state.mediaStream.getTracks().forEach(track => track.stop());
+				}
+
+				try {
+					const constraints = {
+						audio: false,
+						video: {
+							facingMode: { ideal: state.facingMode },
+							width: { ideal: 3840, max: 4096 },
+							height: { ideal: 2160, max: 4096 }
+						}
+					};
+
+					if (state.facingMode == 'environment') {
+						constraints.video.facingMode = { ideal: state.facingMode };
+					}
+					else if (state.facingMode == 'user') {
+						constraints.video.facingMode = { exact: state.facingMode };
+					}
+
+					state.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+					state.videoEl.srcObject = state.mediaStream;
+					await state.videoEl.play();
+				}
+				catch (err) {
+					// console.warn("High-res camera constraints failed, falling back to standard video", err);
+					logData(`High-res camera constraints failed, falling back to standard video: ${err}`);
+
+					try {
+						// FIX: Preserve state.facingMode in fallback constraints
+						state.mediaStream = await navigator.mediaDevices.getUserMedia({
+							audio: false,
+							video: { facingMode: { ideal: state.facingMode } },
+						});
+						state.videoEl.srcObject = state.mediaStream;
+						await state.videoEl.play();
+					}
+					catch (e) {
+						// alert("Unable to access camera stream. Please check camera permissions.");
+						logData(`Unable to access camera stream. Please check camera permissions`);
+						return;
+					}
+				}
+			}
+		}
+
+		// Switch facing camera
+		document.getElementById('btn-switch-camera').addEventListener('click', () => {
+			state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+			logData(`Current facing mode: ${state.facingMode}`);
+			startCamera(); // Safety check in startCamera handles missing parameter
+		});
+
+		// Capture Full Resolution Snapshot
+		document.getElementById('btn-capture').addEventListener('click', () => {
+			if (!state.videoEl.videoWidth) return;
+
+			const canvas = document.createElement('canvas');
+			canvas.width = state.videoEl.videoWidth;
+			canvas.height = state.videoEl.videoHeight;
+			const ctx = canvas.getContext('2d');
+			ctx.drawImage(state.videoEl, 0, 0);
+
+			const a = document.createElement('a');
+			a.style.display = 'none';
+			a.href = canvas.toDataURL('image/jpeg', 0.95);
+			a.download = 'image.jpg';
+
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+
+			// Stop camera stream tracks after capture
+			if (state.mediaStream) {
+				state.mediaStream.getTracks().forEach(track => track.stop());
+				state.mediaStream = null;
+			}
+		});
+
+		const logger = document.getElementById("logger");
+		const initLog = document.getElementById("init");
+
+		function logData(msg) {
+			const p = document.createElement("p");
+			p.textContent = msg;
+			logger.prepend(p);
+
+			console.log(msg);
+		}
+	</script>
+</body>
+</html>

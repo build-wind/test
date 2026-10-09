@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Start</title>
+	<!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous"> -->
+	<style>body{width:100dvw;height:100dvh;min-width:320px!important}</style>
+  <link rel="stylesheet" crossorigin href="/assets/bootstrap-DMFBxjQs.css">
+</head>
+
+<body class="d-flex flex-column gap-0 bg-body-tertiary text-dark overflow-hidden">
+
+	<svg xmlns="http://www.w3.org/2000/svg" class="d-none">
+		<symbol id="camera-fill" viewBox="0 0 16 16">
+			<path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0"/>
+			<path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1m9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0"/>
+		</symbol>
+	</svg>
+
+	<nav class="py-2 px-3 bg-white border-bottom shadow-sm">
+		<div class="container-fluid d-flex flex-wrap" style="--bs-gutter-x: 2rem;">
+			<a class="navbar-brand fw-bolder my-auto" href="#">LOGO</a>
+			<ul class="nav me-auto">
+				<li class="nav-item">
+					<a href="#" class="nav-link link-body-emphasis px-2 active" aria-current="page">Home</a>
+				</li>
+			</ul>
+
+			<ul class="nav">
+				<li class="nav-item">
+					<a href="#" class="nav-link link-body-emphasis px-2">Login</a>
+				</li>
+			</ul>
+		</div>
+	</nav>
+
+	<section class="flex-grow-1 w-100 h-auto py-2 px-3 overflow-scroll">
+		<button type="button" class="btn btn-primary" onclick="turnOnFlashlight()">Light On</button>
+		<button type="button" class="btn btn-primary" onclick="turnOffFlashlight()">Light Off</button>
+	</section>
+
+	<div id="log"></div>
+
+	<!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script> -->
+<!-- 	<script src="./public/bootstrap.bundle.min.js" /> -->
+
+	<script>
+	let track = null;
+
+	const myLog = document.getElementById("log");
+
+	function addLog(msg) {
+		const p = document.createElement("p");
+		p.innerHTML = msg;
+		myLog.appendChild(p);
+	}
+
+	// 1. Turn Torch ON
+	async function turnOnFlashlight() {
+	try {
+	// Request permission to use the rear camera
+	const stream = await navigator.mediaDevices.getUserMedia({
+	video: { facingMode: { ideal: 'environment' } }
+	});
+
+	// Get the video track
+	track = stream.getVideoTracks()[0];
+
+	// Check if the device supports the torch capability
+	const capabilities = track.getCapabilities();
+	if (!capabilities.torch) {
+	alert('Torch is not supported on this device/camera.');
+	return;
+	}
+
+	// Turn the torch on
+	await track.applyConstraints({
+	advanced: [{ torch: true }]
+	});
+
+	console.log('Flashlight is ON');
+	} catch (error) {
+	console.error('Error accessing camera or torch:', error);
+	}
+	}
+
+	// 2. Turn Torch OFF
+	async function turnOffFlashlight() {
+	if (track) {
+	try {
+	// Turn the torch off
+	await track.applyConstraints({
+	advanced: [{ torch: false }]
+	});
+
+	// Stop the camera stream to release the hardware
+	track.stop();
+	track = null;
+	console.log('Flashlight is OFF');
+	} catch (error) {
+	console.error('Error turning off torch:', error);
+	}
+	}
+	}
+
+
+	</script>
+</body>
+</html>

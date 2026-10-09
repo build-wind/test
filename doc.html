@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<title>Document Scanner Pro</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+	<script>
+		tailwind.config = {
+			darkMode: 'class',
+			theme: {
+				extend: {
+					colors: {
+						brand: {
+							50: '#ecfdf5',
+							500: '#10b981',
+							600: '#059669',
+							700: '#047857',
+							900: '#064e3b',
+						}
+					}
+				}
+			}
+		};
+	</script>
+	<style>@import "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap";body{touch-action:manipulation;-webkit-tap-highlight-color:transparent;font-family:Inter,sans-serif}.camera-grid{background-image:linear-gradient(90deg,#ffffff26 1px,#0000 1px),linear-gradient(#ffffff26 1px,#0000 1px);background-size:33.333% 33.333%}.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}</style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col justify-between overflow-x-hidden select-none">
+
+	<!-- Top App Navigation Bar -->
+	<header class="h-14 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-md px-4 flex items-center justify-between sticky top-0 z-50">
+		<div class="flex items-center space-x-2">
+			<div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+				</svg>
+			</div>
+			<span class="font-bold text-base tracking-tight text-white">DocScan <span class="text-emerald-400 font-normal text-xs uppercase px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10">Pro</span></span>
+		</div>
+
+		<!-- Active Mode Indicator Badge -->
+		<div id="step-badge" class="text-xs font-medium px-2.5 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 flex items-center gap-1.5">
+			<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+			<span id="step-badge-text">1. Live View</span>
+		</div>
+	</header>
+
+	<!-- Main View Area (Dynamic Views) -->
+	<main class="flex-1 relative flex flex-col justify-center items-center p-2 sm:p-4 overflow-hidden">
+
+		<!-- MODE 1: LIVE CAMERA STREAM VIEW -->
+		<section id="view-camera" class="w-full max-w-xl flex-1 flex flex-col justify-between items-center relative rounded-2xl overflow-hidden bg-black border border-zinc-800 shadow-2xl">
+			<div class="relative w-full h-full flex-1 flex items-center justify-center overflow-hidden">
+				<video id="camera-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+				<div class="absolute inset-0 camera-grid pointer-events-none"></div>
+
+				<!-- Frame Helper Overlay -->
+				<div class="absolute inset-8 border-2 border-dashed border-emerald-500/40 rounded-xl pointer-events-none flex items-center justify-center">
+					<span class="text-xs text-emerald-400/80 bg-black/60 px-3 py-1 rounded-full backdrop-blur-sm border border-emerald-500/20">
+						Position document within frame
+					</span>
+				</div>
+			</div>
+
+			<!-- Camera Action Controls -->
+			<div class="w-full bg-zinc-900/90 border-t border-zinc-800 p-4 flex items-center justify-around gap-4 z-10">
+				<!-- Gallery File Upload Button -->
+				<label class="cursor-pointer flex flex-col items-center gap-1 text-zinc-400 hover:text-white transition">
+					<div class="w-11 h-11 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+						</svg>
+					</div>
+					<span class="text-[10px] font-medium">Gallery</span>
+					<input type="file" id="file-input" accept="image/*" class="hidden" />
+				</label>
+
+				<!-- Main Capture Button -->
+				<button id="btn-capture" class="group relative w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-transform">
+					<div class="w-13 h-13 rounded-full border-2 border-zinc-900 group-hover:bg-emerald-50 transition-colors"></div>
+				</button>
+
+				<!-- Flash/Camera Flip Button -->
+				<button id="btn-switch-camera" class="flex flex-col items-center gap-1 text-zinc-400 hover:text-white transition">
+					<div class="w-11 h-11 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+						</svg>
+					</div>
+					<span class="text-[10px] font-medium">Flip</span>
+				</button>
+			</div>
+		</section>
+
+		<!-- MODE 2: INTERACTIVE CORNER SELECTOR & CROP VIEW -->
+		<section id="view-crop" class="hidden w-full max-w-xl flex-1 flex-col justify-between items-center relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl p-3">
+			<div class="w-full text-center py-1">
+				<p class="text-xs text-zinc-400">Drag touch handles to align document corners</p>
+			</div>
+
+			<!-- Canvas Container with Interactive Overlay -->
+			<div id="crop-canvas-container" class="relative flex-1 w-full flex items-center justify-center overflow-hidden my-2 rounded-xl bg-black/50 border border-zinc-800">
+				<canvas id="crop-canvas" class="max-w-full max-h-full object-contain touch-none cursor-crosshair"></canvas>
+			</div>
+
+			<!-- Action Control Bar for Crop View -->
+			<div class="w-full grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800">
+				<button id="btn-crop-auto" class="py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+					<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+					</svg>
+					Auto Detect
+				</button>
+				<button id="btn-crop-reset" class="py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+				<svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9"></path>
+				</svg>
+				Reset
+				</button>
+				<button id="btn-crop-next" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/30 transition">
+					Warp & Process
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+					</svg>
+				</button>
+			</div>
+		</section>
+
+		<!-- MODE 3: PROCESSED DOCUMENT & WHITENING VIEW -->
+		<section id="view-result" class="hidden w-full max-w-xl flex-1 flex-col justify-between items-center relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 shadow-2xl p-3">
+
+			<!-- Preset Target Dimensions & Whitening Filter Tabs -->
+			<div class="w-full flex flex-col gap-2 pb-2 border-b border-zinc-800">
+				<div class="flex items-center justify-between gap-2">
+					<!-- Paper Preset Dropdown -->
+					<div class="flex items-center gap-1.5">
+						<span class="text-[11px] text-zinc-400 font-medium">Target Size:</span>
+						<select id="select-preset" class="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2.5 py-1 font-medium focus:ring-1 focus:ring-emerald-500 outline-none">
+							<option value="A4">A4 Document (1240 × 1754)</option>
+							<option value="LEGAL">Legal Document (1275 × 2100)</option>
+							<option value="LETTER">US Letter (1275 × 1650)</option>
+							<option value="SQUARE">Square (1200 × 1200)</option>
+						</select>
+					</div>
+
+					<!-- Processing Status Toast -->
+					<span id="proc-status" class="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-mono hidden">Ready</span>
+				</div>
+
+				<!-- Enhancement Mode Pills -->
+				<div class="grid grid-cols-4 gap-1.5 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+					<button data-mode="whitened-color" class="filter-tab active py-1.5 text-[11px] font-medium rounded-lg text-center transition bg-emerald-600 text-white shadow">
+						White Color
+					</button>
+					<button data-mode="bw" class="filter-tab py-1.5 text-[11px] font-medium rounded-lg text-center transition text-zinc-400 hover:text-zinc-200">
+						Crisp B&W
+					</button>
+					<button data-mode="grayscale" class="filter-tab py-1.5 text-[11px] font-medium rounded-lg text-center transition text-zinc-400 hover:text-zinc-200">
+						Grayscale
+					</button>
+					<button data-mode="original" class="filter-tab py-1.5 text-[11px] font-medium rounded-lg text-center transition text-zinc-400 hover:text-zinc-200">
+						Original
+					</button>
+				</div>
+			</div>
+
+			<!-- Output Preview Canvas -->
+			<div class="relative flex-1 w-full flex items-center justify-center overflow-auto my-2 rounded-xl bg-zinc-950 border border-zinc-800/80 p-1">
+				<canvas id="result-canvas" class="max-w-full max-h-full object-contain rounded shadow-lg"></canvas>
+			</div>
+
+			<!-- Adjustment Sliders for Whitening Intensity -->
+			<div class="w-full bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/80 mb-2 space-y-2">
+				<div class="flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+					<span>Paper Background Whitening Strength</span>
+					<span id="val-whitening" class="text-emerald-400 font-mono">14</span>
+				</div>
+				<input type="range" id="slider-whitening" min="1" max="30" value="14" class="w-full accent-emerald-500 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer" />
+			</div>
+
+			<!-- Action Footer -->
+			<div class="w-full grid grid-cols-2 gap-2 pt-2 border-t border-zinc-800">
+				<button id="btn-back-to-crop" class="py-2.5 px-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17l-5-5m0 0l5-5m-5 5h12"></path>
+				</svg>
+				Adjust Corners
+				</button>
+				<button id="btn-download" class="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/30 transition">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+					</svg>
+					Download HD
+				</button>
+			</div>
+
+		</section>
+
+	</main>
+
+	<script>
+		// Global App State
+		const PAPER_PRESETS = {
+			A4: { width: 1240, height: 1754 },
+			LEGAL: { width: 1275, height: 2100 },
+			LETTER: { width: 1275, height: 1650 },
+			SQUARE: { width: 1200, height: 1200 }
+		};
+
+		let state = {
+			mode: 'camera', // 'camera' | 'crop' | 'result'
+			mediaStream: null,
+			facingMode: 'environment',
+			capturedBitmap: null, // Full resolution HTMLImageElement/ImageBitmap
+			corners: [
+				{ x: 0.15, y: 0.12 }, // Top-Left (normalized 0..1)
+				{ x: 0.85, y: 0.12 }, // Top-Right
+				{ x: 0.85, y: 0.88 }, // Bottom-Right
+				{ x: 0.15, y: 0.88 }  // Bottom-Left
+			],
+			activeHandleIndex: -1,
+			filterMode: 'whitened-color',
+			whiteningStrength: 14,
+			targetPreset: 'A4',
+			warpedImageData: null // Cached raw warped image data
+		};
+
+		// DOM Elements
+		const videoEl = document.getElementById('camera-video');
+		const cropCanvas = document.getElementById('crop-canvas');
+		const cropCtx = cropCanvas.getContext('2d');
+		const resultCanvas = document.getElementById('result-canvas');
+		const resultCtx = resultCanvas.getContext('2d');
+
+		// Navigation & Views
+		const viewCamera = document.getElementById('view-camera');
+		const viewCrop = document.getElementById('view-crop');
+		const viewResult = document.getElementById('view-result');
+		const stepBadgeText = document.getElementById('step-badge-text');
+
+		// 1. Camera Initialization
+		async function startCamera() {
+			if (state.mediaStream) {
+				state.mediaStream.getTracks().forEach(t => t.stop());
+			}
+			try {
+				const constraints = {
+					audio: false,
+					video: {
+						facingMode: { ideal: state.facingMode },
+						width: { ideal: 3840, max: 4096 },
+						height: { ideal: 2160, max: 4096 }
+					}
+				};
+				state.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+				videoEl.srcObject = state.mediaStream;
+				await videoEl.play();
+			} catch (err) {
+				console.warn("High-res camera constraints failed, falling back to standard video", err);
+				try {
+					state.mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+					videoEl.srcObject = state.mediaStream;
+					await videoEl.play();
+				} catch (e) {
+					alert("Unable to access camera stream. Please allow camera permissions or upload an image file from gallery.");
+				}
+			}
+		}
+
+		// Switch facing camera
+		document.getElementById('btn-switch-camera').addEventListener('click', () => {
+			state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+			startCamera();
+		});
+
+		// Capture Full Resolution Snapshot
+		document.getElementById('btn-capture').addEventListener('click', () => {
+			if (!videoEl.videoWidth) return;
+			const canvas = document.createElement('canvas');
+			canvas.width = videoEl.videoWidth;
+			canvas.height = videoEl.videoHeight;
+			const ctx = canvas.getContext('2d');
+			ctx.drawImage(videoEl, 0, 0);
+
+			const img = new Image();
+			img.onload = () => {
+				state.capturedBitmap = img;
+				autoDetectCorners();
+				switchView('crop');
+			};
+			img.src = canvas.toDataURL('image/jpeg', 0.95);
+		});
+
+		// Gallery File Upload
+		document.getElementById('file-input').addEventListener('change', (e) => {
+			const file = e.target.files[0];
+			if (!file) return;
+			const reader = new FileReader();
+			reader.onload = (evt) => {
+				const img = new Image();
+				img.onload = () => {
+					state.capturedBitmap = img;
+					autoDetectCorners();
+					switchView('crop');
+				};
+				img.src = evt.target.result;
+			};
+			reader.readAsDataURL(file);
+		});
+
+		// View Switching Logic
+		function switchView(targetMode) {
+			state.mode = targetMode;
+			viewCamera.classList.add('hidden');
+			viewCrop.classList.add('hidden');
+			viewResult.classList.add('hidden');
+
+			if (targetMode === 'camera') {
+				viewCamera.classList.remove('hidden');
+				stepBadgeText.innerText = '1. Live Camera';
+				startCamera();
+			} else if (targetMode === 'crop') {
+				viewCrop.classList.remove('hidden');
+				stepBadgeText.innerText = '2. Adjust Corners';
+				renderCropCanvas();
+			} else if (targetMode === 'result') {
+				viewResult.classList.remove('hidden');
+				stepBadgeText.innerText = '3. Final Result';
+				processAndRenderResult();
+			}
+		}
+
+		// 2. Interactive Touch Corner Selector & Magnifying Loupe
+		function renderCropCanvas() {
+			if (!state.capturedBitmap) return;
+
+			const img = state.capturedBitmap;
+			const container = document.getElementById('crop-canvas-container');
+			const maxW = container.clientWidth - 16;
+			const maxH = container.clientHeight - 16;
+
+			// Fit aspect ratio inside container
+			const scale = Math.min(maxW / img.width, maxH / img.height);
+			const displayW = Math.round(img.width * scale);
+			const displayH = Math.round(img.height * scale);
+
+			cropCanvas.width = displayW;
+			cropCanvas.height = displayH;
+
+			// Draw original image
+			cropCtx.drawImage(img, 0, 0, displayW, displayH);
+
+			// Convert normalized corners to canvas pixel space
+			const pts = state.corners.map(c => ({
+				x: c.x * displayW,
+				y: c.y * displayH
+			}));
+
+			// Draw semi-transparent dim overlay outside selected polygon
+			cropCtx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+			cropCtx.fillRect(0, 0, displayW, displayH);
+
+			// Clip out inner polygon to keep original bright image visible
+			cropCtx.save();
+			cropCtx.beginPath();
+			cropCtx.moveTo(pts[0].x, pts[0].y);
+			cropCtx.lineTo(pts[1].x, pts[1].y);
+			cropCtx.lineTo(pts[2].x, pts[2].y);
+			cropCtx.lineTo(pts[3].x, pts[3].y);
+			cropCtx.closePath();
+			cropCtx.clip();
+			cropCtx.drawImage(img, 0, 0, displayW, displayH);
+			cropCtx.restore();
+
+			// Draw Polygon Contour Lines
+			cropCtx.lineWidth = 2.5;
+			cropCtx.strokeStyle = '#10b981'; // Emerald
+			cropCtx.beginPath();
+			cropCtx.moveTo(pts[0].x, pts[0].y);
+			cropCtx.lineTo(pts[1].x, pts[1].y);
+			cropCtx.lineTo(pts[2].x, pts[2].y);
+			cropCtx.lineTo(pts[3].x, pts[3].y);
+			cropCtx.closePath();
+			cropCtx.stroke();
+
+			// Corner Labels
+			const labels = ['TL', 'TR', 'BR', 'BL'];
+
+			// Draw Circular Touch Handles
+			pts.forEach((pt, i) => {
+				const isActive = (i === state.activeHandleIndex);
+				cropCtx.beginPath();
+				cropCtx.arc(pt.x, pt.y, isActive ? 16 : 12, 0, Math.PI * 2);
+				cropCtx.fillStyle = isActive ? '#059669' : '#10b981';
+				cropCtx.fill();
+				cropCtx.lineWidth = 3;
+				cropCtx.strokeStyle = '#ffffff';
+				cropCtx.stroke();
+
+				// Label text
+				cropCtx.fillStyle = '#ffffff';
+				cropCtx.font = 'bold 9px Inter, sans-serif';
+				cropCtx.textAlign = 'center';
+				cropCtx.textBaseline = 'middle';
+				cropCtx.fillText(labels[i], pt.x, pt.y);
+			});
+
+			// Draw Magnifying Loupe if actively dragging a handle
+			if (state.activeHandleIndex !== -1) {
+				const activePt = pts[state.activeHandleIndex];
+				drawLoupe(activePt.x, activePt.y, displayW, displayH);
+			}
+		}
+
+		// Magnifying Loupe Component
+		function drawLoupe(cx, cy, displayW, displayH) {
+			const loupeRadius = 50;
+			const zoom = 2.2;
+
+			// Position loupe offset above the active touch handle so finger doesn't block view
+			let loupeX = cx;
+			let loupeY = cy - loupeRadius - 35;
+
+			// Keep loupe inside screen bounds
+			if (loupeY - loupeRadius < 10) loupeY = cy + loupeRadius + 35;
+			if (loupeX - loupeRadius < 10) loupeX = loupeRadius + 10;
+			if (loupeX + loupeRadius > displayW - 10) loupeX = displayW - loupeRadius - 10;
+
+			cropCtx.save();
+
+			// Outer Glow & Border for Loupe
+			cropCtx.beginPath();
+			cropCtx.arc(loupeX, loupeY, loupeRadius + 3, 0, Math.PI * 2);
+			cropCtx.fillStyle = 'rgba(16, 185, 129, 0.4)';
+			cropCtx.fill();
+
+			// Clip circular loupe window
+			cropCtx.beginPath();
+			cropCtx.arc(loupeX, loupeY, loupeRadius, 0, Math.PI * 2);
+			cropCtx.clip();
+
+			// Render Zoomed Image Slice
+			cropCtx.fillStyle = '#000';
+			cropCtx.fillRect(loupeX - loupeRadius, loupeY - loupeRadius, loupeRadius * 2, loupeRadius * 2);
+
+			const sourceW = (loupeRadius * 2) / zoom;
+			const sourceH = (loupeRadius * 2) / zoom;
+			const sourceX = cx - sourceW / 2;
+			const sourceY = cy - sourceH / 2;
+
+			cropCtx.drawImage(
+				state.capturedBitmap,
+				(sourceX / displayW) * state.capturedBitmap.width,
+				(sourceY / displayH) * state.capturedBitmap.height,
+				(sourceW / displayW) * state.capturedBitmap.width,
+				(sourceH / displayH) * state.capturedBitmap.height,
+				loupeX - loupeRadius,
+				loupeY - loupeRadius,
+				loupeRadius * 2,
+				loupeRadius * 2
+			);
+
+			// Loupe Crosshair Guide
+			cropCtx.strokeStyle = '#10b981';
+			cropCtx.lineWidth = 1.5;
+
+			cropCtx.beginPath();
+			cropCtx.moveTo(loupeX - 12, loupeY);
+			cropCtx.lineTo(loupeX + 12, loupeY);
+			cropCtx.moveTo(loupeX, loupeY - 12);
+			cropCtx.lineTo(loupeX, loupeY + 12);
+			cropCtx.stroke();
+
+			// Loupe Ring Outline
+			cropCtx.beginPath();
+			cropCtx.arc(loupeX, loupeY, loupeRadius, 0, Math.PI * 2);
+			cropCtx.lineWidth = 3;
+			cropCtx.strokeStyle = '#ffffff';
+			cropCtx.stroke();
+
+			cropCtx.restore();
+		}
+
+		// Touch & Pointer Event Handlers for Dragging Handles
+		function getPointerPos(evt) {
+			const rect = cropCanvas.getBoundingClientRect();
+			const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+			const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+			return {
+				x: clientX - rect.left,
+				y: clientY - rect.top
+			};
+		}
+
+		function onPointerDown(evt) {
+			const pos = getPointerPos(evt);
+			const displayW = cropCanvas.width;
+			const displayH = cropCanvas.height;
+
+			const hitRadius = 35; // Touch target radius for easy mobile tapping
+			let minDistance = Infinity;
+			let closestIdx = -1;
+
+			state.corners.forEach((c, i) => {
+				const px = c.x * displayW;
+				const py = c.y * displayH;
+				const dist = Math.hypot(px - pos.x, py - pos.y);
+				if (dist < hitRadius && dist < minDistance) {
+				minDistance = dist;
+				closestIdx = i;
+				}
+			});
+
+			if (closestIdx !== -1) {
+				state.activeHandleIndex = closestIdx;
+				renderCropCanvas();
+			}
+		}
+
+		function onPointerMove(evt) {
+			if (state.activeHandleIndex === -1) return;
+			evt.preventDefault();
+
+			const pos = getPointerPos(evt);
+			const displayW = cropCanvas.width;
+			const displayH = cropCanvas.height;
+
+			// Clamp normalized coordinates to canvas bounds [0..1]
+			const nx = Math.max(0, Math.min(1, pos.x / displayW));
+			const ny = Math.max(0, Math.min(1, pos.y / displayH));
+
+			state.corners[state.activeHandleIndex] = { x: nx, y: ny };
+			renderCropCanvas();
+		}
+
+		function onPointerUp() {
+			if (state.activeHandleIndex !== -1) {
+				state.activeHandleIndex = -1;
+				renderCropCanvas();
+			}
+		}
+
+		cropCanvas.addEventListener('mousedown', onPointerDown);
+		window.addEventListener('mousemove', onPointerMove);
+		window.addEventListener('mouseup', onPointerUp);
+
+		cropCanvas.addEventListener('touchstart', onPointerDown, { passive: false });
+		window.addEventListener('touchmove', onPointerMove, { passive: false });
+		window.addEventListener('touchend', onPointerUp);
+
+		// Auto Detect Corner Heuristic
+		function autoDetectCorners() {
+			state.corners = [
+				{ x: 0.12, y: 0.10 },
+				{ x: 0.88, y: 0.10 },
+				{ x: 0.88, y: 0.90 },
+				{ x: 0.12, y: 0.90 }
+			];
+		}
+
+		document.getElementById('btn-crop-auto').addEventListener('click', () => {
+			autoDetectCorners();
+			renderCropCanvas();
+		});
+
+		document.getElementById('btn-crop-reset').addEventListener('click', () => {
+			state.corners = [
+				{ x: 0, y: 0 },
+				{ x: 1, y: 0 },
+				{ x: 1, y: 1 },
+				{ x: 0, y: 1 }
+			];
+			renderCropCanvas();
+		});
+
+		document.getElementById('btn-crop-next').addEventListener('click', () => {
+			switchView('result');
+		});
+
+		// 3. Pure JS Homography Matrix Solver ($3 \times 3$ Linear System)
+		function solve8x8(A, b) {
+			const n = 8;
+			for (let i = 0; i < n; i++) {
+				let maxRow = i;
+				for (let k = i + 1; k < n; k++) {
+					if (Math.abs(A[k][i]) > Math.abs(A[maxRow][i])) maxRow = k;
+				}
+				let tmpRow = A[i]; A[i] = A[maxRow]; A[maxRow] = tmpRow;
+				let tmpB = b[i]; b[i] = b[maxRow]; b[maxRow] = tmpB;
+
+				if (Math.abs(A[i][i]) < 1e-10) return null;
+
+				for (let k = i + 1; k < n; k++) {
+					let c = -A[k][i] / A[i][i];
+					for (let j = i; j < n; j++) {
+						if (i === j) A[k][j] = 0;
+						else A[k][j] += c * A[i][j];
+					}
+					b[k] += c * b[i];
+				}
+			}
+
+			const x = new Array(n);
+			for (let i = n - 1; i >= 0; i--) {
+				let sum = 0;
+				for (let j = i + 1; j < n; j++) {
+				sum += A[i][j] * x[j];
+				}
+				x[i] = (b[i] - sum) / A[i][i];
+			}
+			return x;
+		}
+
+		function getInverseHomographyMatrix(srcPts, dstPts) {
+			// Calculates mapping from destination square coordinates back to source trapezoid
+			const A = [];
+			const b = [];
+			for (let i = 0; i < 4; i++) {
+				const u = dstPts[i].x, v = dstPts[i].y;
+				const x = srcPts[i].x, y = srcPts[i].y;
+				A.push([u, v, 1, 0, 0, 0, -x * u, -x * v]);
+				b.push(x);
+				A.push([0, 0, 0, u, v, 1, -y * u, -y * v]);
+				b.push(y);
+			}
+			const h = solve8x8(A, b);
+			if (!h) return null;
+			return [
+				[h[0], h[1], h[2]],
+				[h[3], h[4], h[5]],
+				[h[6], h[7], 1]
+			];
+		}
+
+		// Bilinear Perspective Transform
+		function warpPerspective(srcCanvas, srcCorners, targetW, targetH) {
+			const srcCtx = srcCanvas.getContext('2d');
+			const srcData = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+			const sw = srcCanvas.width;
+			const sh = srcCanvas.height;
+
+			const dstCorners = [
+				{ x: 0, y: 0 },
+				{ x: targetW, y: 0 },
+				{ x: targetW, y: targetH },
+				{ x: 0, y: targetH }
+			];
+
+			const H = getInverseHomographyMatrix(srcCorners, dstCorners);
+			const dstImgData = new ImageData(targetW, targetH);
+			const dstPixels = dstImgData.data;
+			const srcPixels = srcData.data;
+
+			let dstIdx = 0;
+			const h0 = H[0][0], h1 = H[0][1], h2 = H[0][2];
+			const h3 = H[1][0], h4 = H[1][1], h5 = H[1][2];
+			const h6 = H[2][0], h7 = H[2][1], h8 = H[2][2];
+
+			for (let y = 0; y < targetH; y++) {
+				for (let x = 0; x < targetW; x++) {
+					const W = h6 * x + h7 * y + h8;
+					const sx = (h0 * x + h1 * y + h2) / W;
+					const sy = (h3 * x + h4 * y + h5) / W;
+
+					if (sx >= 0 && sx < sw - 1 && sy >= 0 && sy < sh - 1) {
+						const x0 = Math.floor(sx);
+						const y0 = Math.floor(sy);
+						const x1 = x0 + 1;
+						const y1 = y0 + 1;
+
+						const dx = sx - x0;
+						const dy = sy - y0;
+
+						const i00 = (y0 * sw + x0) * 4;
+						const i10 = (y0 * sw + x1) * 4;
+						const i01 = (y1 * sw + x0) * 4;
+						const i11 = (y1 * sw + x1) * 4;
+
+						const w00 = (1 - dx) * (1 - dy);
+						const w10 = dx * (1 - dy);
+						const w01 = (1 - dx) * dy;
+						const w11 = dx * dy;
+
+						dstPixels[dstIdx]   = srcPixels[i00] * w00 + srcPixels[i10] * w10 + srcPixels[i01] * w01 + srcPixels[i11] * w11;
+						dstPixels[dstIdx+1] = srcPixels[i00+1] * w00 + srcPixels[i10+1] * w10 + srcPixels[i01+1] * w01 + srcPixels[i11+1] * w11;
+						dstPixels[dstIdx+2] = srcPixels[i00+2] * w00 + srcPixels[i10+2] * w10 + srcPixels[i01+2] * w01 + srcPixels[i11+2] * w11;
+						dstPixels[dstIdx+3] = 255;
+					} else {
+						dstPixels[dstIdx]   = 255;
+						dstPixels[dstIdx+1] = 255;
+						dstPixels[dstIdx+2] = 255;
+						dstPixels[dstIdx+3] = 255;
+					}
+					dstIdx += 4;
+				}
+			}
+
+			return dstImgData;
+		}
+
+		// 4. Fast O(N) Integral Image Paper Whitening Algorithm
+		function applyAdaptivePaperWhitening(imgData, mode, whiteningOffset) {
+			const w = imgData.width;
+			const h = imgData.height;
+			const pixels = imgData.data;
+
+			if (mode === 'original') return imgData;
+
+			// 1. Grayscale & Integral Image Buffers
+			const gray = new Uint8Array(w * h);
+			const integral = new Uint32Array((w + 1) * (h + 1));
+
+			for (let i = 0, j = 0; i < pixels.length; i += 4, j++) {
+				gray[j] = Math.round(0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2]);
+			}
+
+			const w1 = w + 1;
+			for (let y = 0; y < h; y++) {
+					let rowSum = 0;
+					const rowIdxInt = (y + 1) * w1;
+					const prevRowIdxInt = y * w1;
+					const rowIdxGray = y * w;
+					for (let x = 0; x < w; x++) {
+					rowSum += gray[rowIdxGray + x];
+					integral[rowIdxInt + x + 1] = integral[prevRowIdxInt + x + 1] + rowSum;
+				}
+			}
+
+			const outputData = new ImageData(new Uint8ClampedArray(pixels), w, h);
+			const out = outputData.data;
+			const windowRadius = 16;
+
+			for (let y = 0; y < h; y++) {
+				const y0 = Math.max(0, y - windowRadius);
+				const y1 = Math.min(h, y + windowRadius + 1);
+
+				for (let x = 0; x < w; x++) {
+					const x0 = Math.max(0, x - windowRadius);
+					const x1 = Math.min(w, x + windowRadius + 1);
+					const count = (x1 - x0) * (y1 - y0);
+
+					const sum = integral[y1 * w1 + x1] - integral[y0 * w1 + x1] - integral[y1 * w1 + x0] + integral[y0 * w1 + x0];
+					const localMean = sum / count;
+
+					const pIdx = (y * w + x) * 4;
+					const g = gray[y * w + x];
+
+					if (mode === 'bw') {
+						const val = (g < localMean - whiteningOffset) ? 0 : 255;
+						out[pIdx]   = val;
+						out[pIdx+1] = val;
+						out[pIdx+2] = val;
+					} else if (mode === 'whitened-color') {
+						if (g >= localMean - whiteningOffset) {
+							// Whiten paper background while retaining colored ink
+							const ratio = Math.min(1.4, (g + 25) / (localMean + 1));
+							out[pIdx]   = Math.min(255, pixels[pIdx] * ratio);
+							out[pIdx+1] = Math.min(255, pixels[pIdx+1] * ratio);
+							out[pIdx+2] = Math.min(255, pixels[pIdx+2] * ratio);
+						} else {
+							// Text and signatures
+							const factor = Math.max(0.65, (g / (localMean + 1)));
+							out[pIdx]   = Math.max(0, Math.min(255, pixels[pIdx] * factor));
+							out[pIdx+1] = Math.max(0, Math.min(255, pixels[pIdx+1] * factor));
+							out[pIdx+2] = Math.max(0, Math.min(255, pixels[pIdx+2] * factor));
+						}
+					} else if (mode === 'grayscale') {
+						const val = (g >= localMean - whiteningOffset) ? 255 : Math.max(0, Math.min(255, (g / localMean) * 255));
+						out[pIdx]   = val;
+						out[pIdx+1] = val;
+						out[pIdx+2] = val;
+					}
+				}
+			}
+
+			return outputData;
+		}
+
+		// 5. Result Processing Pipeline
+		function processAndRenderResult() {
+			const procStatus = document.getElementById('proc-status');
+			procStatus.classList.remove('hidden');
+			procStatus.innerText = 'Processing...';
+
+			setTimeout(() => {
+				const img = state.capturedBitmap;
+				const preset = PAPER_PRESETS[state.targetPreset];
+
+				// Create temporary canvas for source full-res image
+				const tempCanvas = document.createElement('canvas');
+				tempCanvas.width = img.width;
+				tempCanvas.height = img.height;
+				const tempCtx = tempCanvas.getContext('2d');
+				tempCtx.drawImage(img, 0, 0);
+
+				// Convert normalized crop corners to source image coordinates
+				const srcCorners = state.corners.map(c => ({
+					x: c.x * img.width,
+					y: c.y * img.height
+				}));
+
+				// 1. Homography Perspective Warp
+				state.warpedImageData = warpPerspective(tempCanvas, srcCorners, preset.width, preset.height);
+
+				// 2. Integral Image Whitening Filter
+				const cleanedData = applyAdaptivePaperWhitening(
+					state.warpedImageData,
+					state.filterMode,
+					state.whiteningStrength
+				);
+
+				// Render to Output Canvas
+				resultCanvas.width = preset.width;
+				resultCanvas.height = preset.height;
+				resultCtx.putImageData(cleanedData, 0, 0);
+
+				procStatus.innerText = 'Complete';
+				setTimeout(() => procStatus.classList.add('hidden'), 1500);
+			}, 50);
+		}
+
+		// Filter Mode Switcher Tabs
+		document.querySelectorAll('.filter-tab').forEach(tab => {
+			tab.addEventListener('click', (e) => {
+				document.querySelectorAll('.filter-tab').forEach(t => {
+					t.classList.remove('bg-emerald-600', 'text-white', 'shadow');
+					t.classList.add('text-zinc-400');
+				});
+				e.target.classList.add('bg-emerald-600', 'text-white', 'shadow');
+				e.target.classList.remove('text-zinc-400');
+
+				state.filterMode = e.target.dataset.mode;
+				processAndRenderResult();
+			});
+		});
+
+		// Preset Size Dropdown Change
+		document.getElementById('select-preset').addEventListener('change', (e) => {
+			state.targetPreset = e.target.value;
+			processAndRenderResult();
+		});
+
+		// Whitening Slider Listener
+		const sliderWhitening = document.getElementById('slider-whitening');
+		const valWhitening = document.getElementById('val-whitening');
+		sliderWhitening.addEventListener('input', (e) => {
+			state.whiteningStrength = parseInt(e.target.value, 10);
+			valWhitening.innerText = state.whiteningStrength;
+			processAndRenderResult();
+		});
+
+		// Back to Edit button
+		document.getElementById('btn-back-to-crop').addEventListener('click', () => {
+			switchView('crop');
+		});
+
+		// Download Image File
+		document.getElementById('btn-download').addEventListener('click', () => {
+			const link = document.createElement('a');
+			link.download = `Document_${state.targetPreset}_${Date.now()}.jpg`;
+			link.href = resultCanvas.toDataURL('image/jpeg', 0.92);
+			link.click();
+		});
+
+		// Initialize App
+		window.addEventListener('load', () => {
+			startCamera();
+		});
+	</script>
+</body>
+</html>

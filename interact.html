@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Perspective Crop & IndexedDB Store</title>
+	<!-- Interact.js -->
+	<script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+	<!-- Adonmo perspective-transform -->
+	<!-- <script src="https://cdn.jsdelivr.net/npm/perspective-transform@1.0.1/dist/perspective-transform.min.js"></script> -->
+
+	<style>body{flex-direction:column;gap:20px;padding:20px;font-family:sans-serif;display:flex}.container{-webkit-user-select:none;user-select:none;display:inline-block;position:relative}canvas{border:1px solid #ccc;display:block}#overlayCanvas{pointer-events:none;position:absolute;top:0;left:0}.handle{cursor:move;touch-action:none;background:#007bff;border:2px solid #fff;border-radius:50%;width:16px;height:16px;position:absolute;transform:translate(-50%,-50%);box-shadow:0 2px 4px #0000004d}.controls{align-items:center;gap:10px;display:flex}.handle.mid{background-color:#fff;border:2px solid #007bff;border-radius:2px;width:12px;height:12px}#mid0,#mid2{cursor:ns-resize}#mid1,#mid3{cursor:ew-resize}.handle.corner{cursor:move}@keyframes flashRedCorner{0%,to{background-color:#007bff;border-color:#fff;box-shadow:0 0 #0000}25%,75%{background-color:#dc3545;border-color:#ff8484;box-shadow:0 0 10px #dc3545e6}}@keyframes flashRedMid{0%,to{background-color:#fff;border-color:#007bff;box-shadow:0 0 #0000}25%,75%{background-color:#ff8484;border-color:#dc3545;box-shadow:0 0 10px #dc3545e6}}.handle.corner.blocked{animation:.2s ease-in-out 2 flashRedCorner}.handle.mid.blocked{animation:.2s ease-in-out 2 flashRedMid}</style>
+</head>
+<body>
+	<h2>Client-Side Perspective Crop & Storage</h2>
+
+	<div class="controls">
+		<input type="file" id="fileInput" accept="image/*">
+		<button id="cropBtn" disabled>Warp Crop & Save to IndexedDB</button>
+		<button id="loadBtn">Load Last Image from IndexedDB</button>
+	</div>
+
+	<div class="container" id="editorContainer">
+		<canvas id="sourceCanvas"></canvas>
+		<canvas id="overlayCanvas"></canvas>
+
+		<!-- Corner Handles -->
+		<div class="handle corner" id="pt0" data-type="corner" data-index="0"></div>
+		<div class="handle corner" id="pt1" data-type="corner" data-index="1"></div>
+		<div class="handle corner" id="pt2" data-type="corner" data-index="2"></div>
+		<div class="handle corner" id="pt3" data-type="corner" data-index="3"></div>
+
+		<!-- Side Midpoint Handles -->
+		<div class="handle mid" id="mid0" data-type="mid" data-index="0"></div>
+		<div class="handle mid" id="mid1" data-type="mid" data-index="1"></div>
+		<div class="handle mid" id="mid2" data-type="mid" data-index="2"></div>
+		<div class="handle mid" id="mid3" data-type="mid" data-index="3"></div>
+	</div>
+
+	<h3>Warped Result (Retrieved from IndexedDB)</h3>
+	<img id="resultImage" style="max-width: 500px; border: 1px dashed #666;" alt="Result preview" />
+
+	<script>
+		// --- 1. State Variables & DOM Elements ---
+		const sourceCanvas = document.getElementById('sourceCanvas');
+		const overlayCanvas = document.getElementById('overlayCanvas');
+		const srcCtx = sourceCanvas.getContext('2d');
+		const overlayCtx = overlayCanvas.getContext('2d');
+		const fileInput = document.getElementById('fileInput');
+		const cropBtn = document.getElementById('cropBtn');
+
+		let loadedImage = null;
+		// 4 Corner points: [Top-Left, Top-Right, Bottom-Right, Bottom-Left]
+		let corners = [{x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}, {x: 0, y: 0}];
+
+		// --- 2. Image Loading & Initial Setup ---
+		fileInput.addEventListener('change', (e) => {
+			const file = e.target.files[0];
+			if (!file) return;
+
+			const img = new Image();
+			img.onload = () => {
+				loadedImage = img;
+				sourceCanvas.width = img.width;
+				sourceCanvas.height = img.height;
+				overlayCanvas.width = img.width;
+				overlayCanvas.height = img.height;
+
+				srcCtx.drawImage(img, 0, 0);
+
+				const w = img.width, h = img.height;
+				const marginX = w * 0.1, marginY = h * 0.1;
+
+				corners = [
+					{ x: marginX, y: marginY },         // 0: Top-Left
+					{ x: w - marginX, y: marginY },     // 1: Top-Right
+					{ x: w - marginX, y: h - marginY }, // 2: Bottom-Right
+					{ x: marginX, y: h - marginY }      // 3: Bottom-Left
+				];
+
+				updateHandlePositions();
+				drawOverlay();
+				cropBtn.disabled = false;
+			};
+			img.src = URL.createObjectURL(file);
+		});
+
+		// Calculate and place both corner and midpoint handles
+		function updateHandlePositions() {
+			// 1. Update 4 corner handles
+			corners.forEach((pt, i) => {
+				const el = document.getElementById(`pt${i}`);
+				if (el) {
+					el.style.left = `${pt.x}px`;
+					el.style.top = `${pt.y}px`;
+				}
+			});
+
+			// 2. Compute 4 midpoint handle coordinates
+			const midpoints = [
+				{ x: (corners[0].x + corners[1].x) / 2, y: (corners[0].y + corners[1].y) / 2 }, // 0: Top
+				{ x: (corners[1].x + corners[2].x) / 2, y: (corners[1].y + corners[2].y) / 2 }, // 1: Right
+				{ x: (corners[2].x + corners[3].x) / 2, y: (corners[2].y + corners[3].y) / 2 }, // 2: Bottom
+				{ x: (corners[3].x + corners[0].x) / 2, y: (corners[3].y + corners[0].y) / 2 }  // 3: Left
+			];
+
+			// 3. Update 4 midpoint handle elements
+			midpoints.forEach((pt, i) => {
+				const el = document.getElementById(`mid${i}`);
+				if (el) {
+					el.style.left = `${pt.x}px`;
+					el.style.top = `${pt.y}px`;
+				}
+			});
+		}
+
+		let isBlocked = false;
+		let blockTimeout = null;
+
+		// Trigger red pulse when boundary collision occurs
+		function triggerBoundaryAlert() {
+			if (isBlocked) return; // Prevent resetting timer continuously during drag
+
+			isBlocked = true;
+
+			// Add CSS class to handles
+			document.querySelectorAll('.handle').forEach(h => h.classList.add('blocked'));
+			drawOverlay();
+
+			// Reset back to original color after 500ms (matches CSS animation duration)
+			blockTimeout = setTimeout(() => {
+				isBlocked = false;
+				document.querySelectorAll('.handle').forEach(h => h.classList.remove('blocked'));
+				drawOverlay();
+			}, 300);
+		}
+
+		function drawOverlay() {
+			overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+			// 1. Fill outer region
+			overlayCtx.beginPath();
+			overlayCtx.rect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+			overlayCtx.moveTo(corners[0].x, corners[0].y);
+			overlayCtx.lineTo(corners[1].x, corners[1].y);
+			overlayCtx.lineTo(corners[2].x, corners[2].y);
+			overlayCtx.lineTo(corners[3].x, corners[3].y);
+			overlayCtx.closePath();
+
+			// Tint outside area red if blocked, translucent black otherwise
+			overlayCtx.fillStyle = isBlocked ? 'rgba(220, 53, 69, 0.25)' : 'rgba(0, 0, 0, 0.5)';
+			overlayCtx.fill('evenodd');
+
+			// 2. Draw crop box border
+			overlayCtx.beginPath();
+			overlayCtx.moveTo(corners[0].x, corners[0].y);
+			overlayCtx.lineTo(corners[1].x, corners[1].y);
+			overlayCtx.lineTo(corners[2].x, corners[2].y);
+			overlayCtx.lineTo(corners[3].x, corners[3].y);
+			overlayCtx.closePath();
+
+			// Border turns red and grows thicker when blocked
+			overlayCtx.strokeStyle = isBlocked ? '#dc3545' : '#007bff';
+			overlayCtx.lineWidth = isBlocked ? 3 : 2;
+			overlayCtx.stroke();
+		}
+
+		interact('.handle').draggable({
+			listeners: {
+				move(event) {
+					const target = event.target;
+					const index = parseInt(target.getAttribute('data-index'));
+					const isMid = target.id.startsWith('mid') || target.getAttribute('data-type') === 'mid';
+					const isCorner = target.id.startsWith('pt') || target.getAttribute('data-type') === 'corner';
+
+					const dx = event.dx;
+					const dy = event.dy;
+
+					if (isCorner && !isNaN(index)) {
+						// Requested target coordinates
+						const targetX = corners[index].x + dx;
+						const targetY = corners[index].y + dy;
+
+						// Clamped boundary values
+						const clampedX = Math.max(0, Math.min(sourceCanvas.width, targetX));
+						const clampedY = Math.max(0, Math.min(sourceCanvas.height, targetY));
+
+						// Trigger alert if movement requested exceeds canvas boundary
+						if ((targetX !== clampedX || targetY !== clampedY) && (dx !== 0 || dy !== 0)) {
+							triggerBoundaryAlert();
+						}
+
+						corners[index].x = clampedX;
+						corners[index].y = clampedY;
+					}
+					else if (isMid && !isNaN(index)) {
+						const idx1 = index;
+						const idx2 = (index + 1) % 4;
+
+						const p1 = corners[idx1];
+						const p2 = corners[idx2];
+
+						const edgeX = p2.x - p1.x;
+						const edgeY = p2.y - p1.y;
+
+						let nx = -edgeY;
+						let ny = edgeX;
+						const len = Math.hypot(nx, ny);
+
+						if (len > 0) {
+							nx /= len;
+							ny /= len;
+
+							const dot = dx * nx + dy * ny;
+							let perpDx = dot * nx;
+							let perpDy = dot * ny;
+
+							let t = 1.0;
+							const W = sourceCanvas.width;
+							const H = sourceCanvas.height;
+
+							// Check maximum allowable movement factor t
+							for (const p of [p1, p2]) {
+								if (perpDx > 0 && p.x + perpDx > W) t = Math.min(t, (W - p.x) / perpDx);
+								else if (perpDx < 0 && p.x + perpDx < 0) t = Math.min(t, -p.x / perpDx);
+
+								if (perpDy > 0 && p.y + perpDy > H) t = Math.min(t, (H - p.y) / perpDy);
+								else if (perpDy < 0 && p.y + perpDy < 0) t = Math.min(t, -p.y / perpDy);
+							}
+
+							t = Math.max(0, t);
+
+							// Trigger alert if perpendicular movement is restricted by boundary
+							if (dot !== 0 && t < 1.0) {
+								triggerBoundaryAlert();
+							}
+
+							p1.x += perpDx * t;
+							p1.y += perpDy * t;
+							p2.x += perpDx * t;
+							p2.y += perpDy * t;
+						}
+					}
+
+					updateHandlePositions();
+					drawOverlay();
+				}
+			}
+		});
+
+		// function drawOverlay() {
+		// 	overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  //
+		// 	// 1. Fill outside canvas area using 'evenodd' rule
+		// 	overlayCtx.beginPath();
+		// 	overlayCtx.rect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  //
+		// 	overlayCtx.moveTo(corners[0].x, corners[0].y);
+		// 	overlayCtx.lineTo(corners[1].x, corners[1].y);
+		// 	overlayCtx.lineTo(corners[2].x, corners[2].y);
+		// 	overlayCtx.lineTo(corners[3].x, corners[3].y);
+		// 	overlayCtx.closePath();
+  //
+		// 	overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+		// 	overlayCtx.fill('evenodd');
+  //
+		// 	// 2. Draw border around the crop area
+		// 	overlayCtx.beginPath();
+		// 	overlayCtx.moveTo(corners[0].x, corners[0].y);
+		// 	overlayCtx.lineTo(corners[1].x, corners[1].y);
+		// 	overlayCtx.lineTo(corners[2].x, corners[2].y);
+		// 	overlayCtx.lineTo(corners[3].x, corners[3].y);
+		// 	overlayCtx.closePath();
+  //
+		// 	overlayCtx.strokeStyle = '#007bff';
+		// 	overlayCtx.lineWidth = 2;
+		// 	overlayCtx.stroke();
+		// }
+
+		// interact('.handle').draggable({
+		// 	listeners: {
+		// 		move(event) {
+		// 			const target = event.target;
+		// 			const index = parseInt(target.getAttribute('data-index'));
+		// 			const isMid = target.id.startsWith('mid') || target.getAttribute('data-type') === 'mid';
+		// 			const isCorner = target.id.startsWith('pt') || target.getAttribute('data-type') === 'corner';
+  //
+		// 			const dx = event.dx;
+		// 			const dy = event.dy;
+  //
+		// 			if (isCorner && !isNaN(index)) {
+		// 				// Corner dragging remains standard point clamping
+		// 				corners[index].x = Math.max(0, Math.min(sourceCanvas.width, corners[index].x + dx));
+		// 				corners[index].y = Math.max(0, Math.min(sourceCanvas.height, corners[index].y + dy));
+		// 			}
+		// 			else if (isMid && !isNaN(index)) {
+		// 				const idx1 = index;
+		// 				const idx2 = (index + 1) % 4; // Adjacent corner indices
+  //
+		// 				const p1 = corners[idx1];
+		// 				const p2 = corners[idx2];
+  //
+		// 				// 1. Calculate edge vector (p1 -> p2)
+		// 				const edgeX = p2.x - p1.x;
+		// 				const edgeY = p2.y - p1.y;
+  //
+		// 				// 2. Compute normal vector perpendicular to the edge
+		// 				let nx = -edgeY;
+		// 				let ny = edgeX;
+		// 				const len = Math.hypot(nx, ny);
+  //
+		// 				if (len > 0) {
+		// 					// Normalize normal vector
+		// 					nx /= len;
+		// 					ny /= len;
+  //
+		// 					// 3. Project mouse delta onto the normal vector
+		// 					const dot = dx * nx + dy * ny;
+		// 					let perpDx = dot * nx;
+		// 					let perpDy = dot * ny;
+  //
+		// 					// 4. Calculate maximum allowable step factor t (0 <= t <= 1) for BOTH points
+		// 					let t = 1.0;
+		// 					const points = [p1, p2];
+		// 					const W = sourceCanvas.width;
+		// 					const H = sourceCanvas.height;
+  //
+		// 					for (const p of points) {
+		// 						// Check X boundaries
+		// 						if (perpDx > 0 && p.x + perpDx > W) {
+		// 							t = Math.min(t, (W - p.x) / perpDx);
+		// 						}
+		// 						else if (perpDx < 0 && p.x + perpDx < 0) {
+		// 							t = Math.min(t, -p.x / perpDx);
+		// 						}
+  //
+		// 						// Check Y boundaries
+		// 						if (perpDy > 0 && p.y + perpDy > H) {
+		// 							t = Math.min(t, (H - p.y) / perpDy);
+		// 						}
+		// 						else if (perpDy < 0 && p.y + perpDy < 0) {
+		// 							t = Math.min(t, -p.y / perpDy);
+		// 						}
+		// 					}
+  //
+		// 					// Ensure t is non-negative
+		// 					t = Math.max(0, t);
+  //
+		// 					// 5. Apply the scaled perpendicular displacement to BOTH points equally
+		// 					const finalDx = perpDx * t;
+		// 					const finalDy = perpDy * t;
+  //
+		// 					p1.x += finalDx;
+		// 					p1.y += finalDy;
+		// 					p2.x += finalDx;
+		// 					p2.y += finalDy;
+		// 				}
+		// 			}
+  //
+		// 			updateHandlePositions();
+		// 			drawOverlay();
+		// 		}
+		// 	}
+		// });
+
+		// --- 5. IndexedDB Storage Service ---
+		const DB_NAME = 'ImageStoreDB';
+		const STORE_NAME = 'cropped_images';
+
+		function initDB() {
+			return new Promise((resolve, reject) => {
+				const request = indexedDB.open(DB_NAME, 1);
+				request.onupgradeneeded = (e) => {
+					const db = e.target.result;
+					if (!db.objectStoreNames.contains(STORE_NAME)) {
+						db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+					}
+				};
+				request.onsuccess = () => resolve(request.result);
+				request.onerror = () => reject(request.error);
+			});
+		}
+
+		async function saveImageToDB(blob) {
+			const db = await initDB();
+			return new Promise((resolve, reject) => {
+				const tx = db.transaction(STORE_NAME, 'readwrite');
+				const store = tx.objectStore(STORE_NAME);
+				store.put({ id: 'latest_crop', imageBlob: blob, timestamp: Date.now() });
+				tx.oncomplete = () => resolve();
+				tx.onerror = () => reject(tx.error);
+			});
+		}
+
+		async function loadImageFromDB() {
+			const db = await initDB();
+			return new Promise((resolve, reject) => {
+				const tx = db.transaction(STORE_NAME, 'readonly');
+				const store = tx.objectStore(STORE_NAME);
+				const request = store.get('latest_crop');
+				request.onsuccess = () => resolve(request.result ? request.result.imageBlob : null);
+				request.onerror = () => reject(request.error);
+			});
+		}
+
+		// --- 6. Execution Flow ---
+		cropBtn.addEventListener('click', () => {
+			// Estimate output dimensions from quadrilateral width and height averages
+			const topW = Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
+			const botW = Math.hypot(corners[2].x - corners[3].x, corners[2].y - corners[3].y);
+			const leftH = Math.hypot(corners[3].x - corners[0].x, corners[3].y - corners[0].y);
+			const rightH = Math.hypot(corners[2].x - corners[1].x, corners[2].y - corners[1].y);
+
+			const targetW = (topW + botW) / 2;
+			const targetH = (leftH + rightH) / 2;
+
+			// 1. Process perspective warp
+			const warpedCanvas = warpPerspective(sourceCanvas, corners, targetW, targetH);
+
+			// 2. Export canvas to Blob & save in IndexedDB
+			warpedCanvas.toBlob(async (blob) => {
+				if (!blob) return;
+				await saveImageToDB(blob);
+				alert('Image successfully warped and saved to IndexedDB!');
+
+				// Show result preview
+				resultImg.src = URL.createObjectURL(blob);
+			}, 'image/png');
+		});
+
+		loadBtn.addEventListener('click', async () => {
+			const blob = await loadImageFromDB();
+			if (blob) {
+				resultImg.src = URL.createObjectURL(blob);
+			}
+			else {
+				alert('No saved image found in IndexedDB.');
+			}
+		});
+	</script>
+</body>
+</html>
